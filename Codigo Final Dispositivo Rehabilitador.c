@@ -15,13 +15,22 @@
 #define I2C_MASTER_TX_BUF_DISABLE   0          // I2C master doesn"t need buffer
 #define I2C_MASTER_RX_BUF_DISABLE   0          // I2C master doesn"t need buffer
 #define I2C_NUM                     I2C_NUM_0
+#define LEDC_CHANNEL_AA LEDC_CHANNEL_0
+#define LEDC_CHANNEL_FE LEDC_CHANNEL_1
+
 
 #define SLAVE_ADDRESS_LCD 0x27 // change this according to ur setup
 esp_err_t err;
 static const char *TAG = "LCD";
 
-#define SERVO_FE_PIN 18
-#define SERVO_AA_PIN 4
+#define SERVO_PIN_AA GPIO_NUM_18
+#define SERVO_PIN_FE GPIO_NUM_19
+#define LEDC_TIMER LEDC_TIMER_0
+#define LEDC_MODE LEDC_LOW_SPEED_MODE
+#define LEDC_CHANNEL_AA LEDC_CHANNEL_0
+#define LEDC_CHANNEL_FE LEDC_CHANNEL_1
+#define LEDC_DUTY_RES LEDC_TIMER_10_BIT
+#define LEDC_FREQUENCY 50
 
 #define LCD_CMD 0
 #define LCD_DATA 1
@@ -47,6 +56,8 @@ static const char keymap[ROW_NUM][COL_NUM] = {
 char tecla; // Variable que guardara lo digitado en el teclado
 
 // Variables
+int posAA = 90;
+int posFE = 135;
 int dura = 500;
 int Tipo = 0;
 int FL = 0;
@@ -83,6 +94,9 @@ void lcd_init(void);
 
 void keypad_init(void);
 
+void set_servo_angle(int channel, int angle);
+void configure_servo(int gpio_num, int channel);
+
 /**
  * @brief i2c master initialization
  */
@@ -110,35 +124,8 @@ void app_main() {
   ESP_LOGI(TAG, "I2C initialized successfully");
   
   // Inicializar los servos
-  ledc_timer_config_t ledc_timer = {
-    .speed_mode = LEDC_LOW_SPEED_MODE,
-    .timer_num = LEDC_TIMER_0,
-    .duty_resolution = LEDC_TIMER_13_BIT,
-    .freq_hz = 50,  // 50 Hz for servos
-  };
-  ledc_timer_config(&ledc_timer);
-
-  ledc_channel_config_t ledc_channel_FE = {
-    .speed_mode = LEDC_LOW_SPEED_MODE,
-    .channel = LEDC_CHANNEL_0,
-    .timer_sel = LEDC_TIMER_0,
-    .intr_type = LEDC_INTR_DISABLE,
-    .gpio_num = SERVO_FE_PIN,
-    .duty = 0,  
-    .hpoint = 0,
-  };
-  ledc_channel_config(&ledc_channel_FE);
-
-  ledc_channel_config_t ledc_channel_AA = {
-    .speed_mode = LEDC_LOW_SPEED_MODE,
-    .channel = LEDC_CHANNEL_1,
-    .timer_sel = LEDC_TIMER_0,
-    .intr_type = LEDC_INTR_DISABLE,
-    .gpio_num = SERVO_AA_PIN,
-    .duty = 0, 
-    .hpoint = 0,
-  };
-  ledc_channel_config(&ledc_channel_AA);
+  configure_servo(SERVO_PIN_AA, LEDC_CHANNEL_AA);
+  configure_servo(SERVO_PIN_FE, LEDC_CHANNEL_FE);
 
   // Inicializar el LCD
   lcd_init();
@@ -750,10 +737,65 @@ void confirm() {
   }
 }
 
+void configure_servo(int gpio_num, int channel) {
+  ledc_timer_config_t ledc_timer = {
+    .speed_mode       = LEDC_MODE,
+    .timer_num        = LEDC_TIMER,
+    .duty_resolution  = LEDC_DUTY_RES,
+    .freq_hz          = LEDC_FREQUENCY,
+    .clk_cfg          = LEDC_AUTO_CLK
+  };
+  ledc_timer_config(&ledc_timer);
+
+  ledc_channel_config_t ledc_channel = {
+    .speed_mode     = LEDC_MODE,
+    .channel        = channel,
+    .timer_sel      = LEDC_TIMER,
+    .intr_type      = LEDC_INTR_DISABLE,
+    .gpio_num       = gpio_num,
+    .duty           = 0,
+    .hpoint         = 0
+  };
+  ledc_channel_config(&ledc_channel);
+}
+
+
+void set_servo_angle(int channel, int angle) {
+  int duty = (angle * (8192 / 180)) + 1024; 
+  ledc_set_duty(LEDC_MODE, channel, duty);
+  ledc_update_duty(LEDC_MODE, channel);
+}
+
 void flashAA() {
-   
+  for (posAA = 90; posAA >= 90 - AB; posAA -= 1) { 
+    set_servo_angle(LEDC_CHANNEL_AA, posAA);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
+
+  for (posAA = 90 - AB; posAA <= 90 + AD; posAA += 1) { 
+    set_servo_angle(LEDC_CHANNEL_AA, posAA);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
+
+  for (posAA = 90 + AD; posAA >= 90; posAA -= 1) { 
+    set_servo_angle(LEDC_CHANNEL_AA, posAA);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
 }
 
 void flashFE() {
+  for (posFE = 135; posFE >= 135 - EX; posFE -= 1) { 
+    set_servo_angle(LEDC_CHANNEL_FE, posFE);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
 
+  for (posFE = 135 - EX; posFE <= 135 + FL; posFE += 1) { 
+    set_servo_angle(LEDC_CHANNEL_FE, posFE);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
+
+  for (posFE = 135 + FL; posFE >= 135; posFE -= 1) { 
+    set_servo_angle(LEDC_CHANNEL_FE, posFE);
+    vTaskDelay(pdMS_TO_TICKS(dura)); 
+  }
 }
